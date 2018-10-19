@@ -1,0 +1,23 @@
+{
+    "name": "petru/exporter2",
+    "type": "project",
+    "require": {
+        "wp-api/client": "dev-master"
+    },
+    "authors": [
+        {
+            "name": "Petru Binzari",
+            "email": "petru_binzari@yahoo.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "autoload": {
+        "psr-0": {
+            "": "vendor/wp-api/client/library"
+        },
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+
+}
