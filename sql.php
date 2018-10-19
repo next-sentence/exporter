@@ -101,7 +101,11 @@ try {
                         FROM pictures
                           left join temp_tags on temp_tags.picture_id = pictures.id
                     
-                        ORDER BY pictures.id;"
+                        ORDER BY pictures.id;
+                  ALTER TABLE migrations_posts CHANGE status status VARCHAR(32) DEFAULT NULL;
+                  ALTER TABLE migrations_media CHANGE status status VARCHAR(32) DEFAULT NULL;
+                        
+                        "
     );
     echo 'Migrations tables successful created' . PHP_EOL;
 

@@ -76,11 +76,11 @@ class Utils
 
             $this->getLogs('Post Uploaded id:' . $result->id . PHP_EOL);
 
-            $this->updatePostStatus('done');
+            $this->updatePostStatus($post->id, 'done');
         } catch (\Exception $exception) {
             $this->getLogs('Post was not uploaded');
 
-            $this->updatePostStatus('failed');
+            $this->updatePostStatus($post->id, 'failed');
         }
     }
 
@@ -94,17 +94,18 @@ class Utils
 
             $this->getLogs('Media Uploaded id:' . $result . PHP_EOL);
 
-            $this->updateMediaStatus('done');
+            $this->updateMediaStatus($media->id, 'done');
         } catch (\Exception $exception) {
             $this->getLogs('Media was not uploaded');
 
-            $this->updateMediaStatus('failed');
+            $this->updateMediaStatus($media->id, 'failed');
         }
     }
 
     /**
      * @param $post
      * @return array
+     * @throws \Requests_Exception
      */
     protected function extractPost($post)
     {
@@ -490,19 +491,22 @@ class Utils
     }
 
     /**
+     * @param $postId
      * @param $status
      */
-    protected function updatePostStatus($status)
+    protected function updatePostStatus($postId, $status)
     {
-        $stmt = $this->getDb()->getConnection()->prepare("UPDATE migrations_posts SET status = ?");
-        $stmt->execute([$status]);
+        $stmt = $this->getDb()->getConnection()->prepare("UPDATE migrations_posts SET status = :status where id = :id");
+        $stmt->execute(['status' => $status, 'id' => $postId]);
     }
+
     /**
+     * @param $mediaId
      * @param $status
      */
-    protected function updateMediaStatus($status)
+    protected function updateMediaStatus($mediaId, $status)
     {
-        $stmt = $this->getDb()->getConnection()->prepare("UPDATE migrations_media SET status = ?");
-        $stmt->execute([$status]);
+        $stmt = $this->getDb()->getConnection()->prepare("UPDATE migrations_media SET status = :status where id = :id");
+        $stmt->execute(['status' => $status, 'id' => $mediaId]);
     }
 }
