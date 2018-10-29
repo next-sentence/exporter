@@ -24,3 +24,9 @@
     ```
     $ php media.php
     ```
+    
+6. Run cards migration script (First make sure that you have installed [acf-to-rest-api](https://github.com/airesvsg/acf-to-rest-api) plugin)
+    
+    ```
+    $ php card.php
+    ```

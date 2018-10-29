@@ -24,16 +24,25 @@ class Utils
      * @var \WPAPI
      */
     private $api;
+    /**
+     * @var \WPAPI
+     */
+    private $acfApi;
     private $posts;
     private $users;
+    private $nmHost;
 
-    public function __construct(DbConfig $db, \WPAPI $api)
+    public function __construct(DbConfig $db, \WPAPI $api, $nmHost)
     {
         $this->db = $db;
         $this->api = $api;
         $this->posts = new \WPAPI_Posts($api);
         $this->users = new \WPAPI_Users($api);
+        $this->nmHost = $nmHost;
+    }
 
+    public function init()
+    {
         $users = $this->users->getAll();
 
         foreach ($users as $item) {
@@ -56,6 +65,12 @@ class Utils
         }
     }
 
+    public function initAcf($acfUrl)
+    {
+        $this->acfApi = clone $this->api;
+        $this->acfApi->base = $acfUrl;
+    }
+
     /**
      * @return DbConfig
      */
@@ -76,11 +91,37 @@ class Utils
 
             $this->getLogs('Post Uploaded id:' . $result->id . PHP_EOL);
 
-            $this->updatePostStatus($post->id, 'done');
+            $this->updateStatus('post', $post->id, 'done');
         } catch (\Exception $exception) {
             $this->getLogs('Post was not uploaded');
 
-            $this->updatePostStatus($post->id, 'failed');
+            $this->updateStatus('post', $post->id, 'failed');
+        }
+    }
+
+    /**
+     * @param $post
+     */
+    public function addCustomPost($post)
+    {
+        try {
+            $data = $this->extractCard($post);
+            $card = $this->createCard($data);
+
+            $response = $this->acfApi->post(
+                '/cards/' . $card->id,
+                ['Content-Type' => 'application/json'],
+                json_encode($this->extractCardItem($post))
+            );
+
+            $response->throw_for_status();
+
+            $this->getLogs('Card Uploaded id:' . $card->id . PHP_EOL);
+            $this->updateStatus('cards', $post->id, 'done');
+
+        } catch (\Exception $exception) {
+            $this->getLogs('Card was not uploaded');
+            $this->updateStatus('cards', $post->id, 'failed');
         }
     }
 
@@ -94,11 +135,11 @@ class Utils
 
             $this->getLogs('Media Uploaded id:' . $result . PHP_EOL);
 
-            $this->updateMediaStatus($media->id, 'done');
+            $this->updateStatus('media', $media->id, 'done');
         } catch (\Exception $exception) {
             $this->getLogs('Media was not uploaded');
 
-            $this->updateMediaStatus($media->id, 'failed');
+            $this->updateStatus('media', $media->id, 'failed');
         }
     }
 
@@ -122,7 +163,7 @@ class Utils
             'content' => $this->extractInlineImages($post),
             'status' => $post->published ? 'publish' : 'draft',
             'featured_media' => $this->extractMedia($post),
-            'categories' => $this->extractCategories($post),
+            'categories' => $this->extractCategories($post->categories),
             'tags' => $this->extractTags($post),
             'author' => $this->extractAuthor($post),
         ];
@@ -134,6 +175,59 @@ class Utils
         }
 
         return $data;
+    }
+
+    /**
+     * @param $post
+     * @return array
+     */
+    protected function extractCard($post)
+    {
+        echo "Assembling card id: " . $post->id . PHP_EOL;
+
+        $data = [
+            'date' => $post->created,
+            'date_gmt' => $post->created,
+            'modified' => $post->modified,
+            'modified_gmt' => $post->created,
+//            'slug' => $post->slug,
+            'title' => $post->title_rus,
+            'excerpt' => $post->partner_url,
+            'content' => '',
+            'status' => $post->published ? 'publish' : 'draft',
+            'featured_media' => $this->extractMedia($post),
+//            'categories' => $this->extractCategories('cards'),
+//            'parent' => '12'
+//            'author' => $this->extractAuthor($post),
+        ];
+
+//        if ($data['categories']) {
+//            $this->getLogs('Attached to: ' . implode(',', $data['categories']));
+//        } else {
+//            $this->getLogs('No category attached');
+//        }
+
+        return $data;
+    }
+
+    /**
+     * @param $post
+     * @return array
+     */
+    protected function extractCardItem($post)
+    {
+        $stmt = $this->getDb()->getConnection()->prepare("SELECT * FROM card_items WHERE card_id = :id ORDER BY position ASC ");
+        $stmt->execute(['id' => $post->id]);
+
+        $items = [];
+        while ($row = $stmt->fetch(\PDO::FETCH_OBJ)){
+            $items['fields']['cards'][] = [
+                'card_title' => $row->title_rus,
+                'card_content' => $row->content_rus,
+            ];
+        }
+
+        return $items;
     }
 
     /**
@@ -176,11 +270,13 @@ class Utils
         return empty($media) ? null : $media->id;
     }
 
-    public function extractCategories($post)
+    /**
+     * @param $categories
+     * @return array
+     */
+    public function extractCategories($categories)
     {
         $ids = [];
-
-        $categories = $post->categories;
 
         if (!$categories) {
             return [];
@@ -259,11 +355,11 @@ class Utils
         $buff = explode('/', $image);
         $name = end($buff);
 
-        $image = filter_var($image, FILTER_SANITIZE_URL);
+//        $image = filter_var($image, FILTER_SANITIZE_URL);
 
         // Check if it's a uri or url
         if (!filter_var($image, FILTER_VALIDATE_URL)) {
-            $image = "http://old.newsmaker.md/{$image}";
+            $image = $this->nmHost . $image;
         }
 
         $image = str_replace(' ', '%20', $image);
@@ -491,22 +587,34 @@ class Utils
     }
 
     /**
-     * @param $postId
-     * @param $status
+     * @param $data
+     * @return \WPAPI_Post
+     * @throws \Requests_Exception
+     * @throws \Requests_Exception_HTTP
      */
-    protected function updatePostStatus($postId, $status)
+    public function createCard($data)
     {
-        $stmt = $this->getDb()->getConnection()->prepare("UPDATE migrations_posts SET status = :status where id = :id");
-        $stmt->execute(['status' => $status, 'id' => $postId]);
+        $data = json_encode($data);
+        $headers = ['Content-Type' => 'application/json'];
+        $response = $this->api->post('/cards', $headers, $data);
+        $response->throw_for_status();
+
+        $data = json_decode($response->body, true);
+        $has_error = ( function_exists('json_last_error') && json_last_error() !== JSON_ERROR_NONE );
+        if ( ( ! $has_error && $data === null ) || $has_error ) {
+            throw new \Exception($response->body);
+        }
+        return new \WPAPI_Post($this->api, $data);
     }
 
     /**
-     * @param $mediaId
+     * @param $table
+     * @param $id
      * @param $status
      */
-    protected function updateMediaStatus($mediaId, $status)
+    protected function updateStatus($table, $id, $status)
     {
-        $stmt = $this->getDb()->getConnection()->prepare("UPDATE migrations_media SET status = :status where id = :id");
-        $stmt->execute(['status' => $status, 'id' => $mediaId]);
+        $stmt = $this->getDb()->getConnection()->prepare("UPDATE migrations_{$table} SET status = :status where id = :id");
+        $stmt->execute(['status' => $status, 'id' => $id]);
     }
 }

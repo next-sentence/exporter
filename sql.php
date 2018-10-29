@@ -10,7 +10,7 @@ try {
     echo 'Starting to create migrations tables...' . PHP_EOL;
 
     $result = $db->getConnection()->exec(
-        "DROP TABLE IF EXISTS migrations_posts, migrations_media, temp_categories, temp_authors, temp_tags, temp_news;
+        "DROP TABLE IF EXISTS migrations_posts, migrations_media, migrations_cards, temp_categories, temp_authors, temp_tags, temp_news;
                   SET group_concat_max_len = 15000;
 
                   CREATE TEMPORARY TABLE temp_news
@@ -101,9 +101,29 @@ try {
                         FROM pictures
                           left join temp_tags on temp_tags.picture_id = pictures.id
                     
-                        ORDER BY pictures.id;
-                  ALTER TABLE migrations_posts CHANGE status status VARCHAR(32) DEFAULT NULL;
-                  ALTER TABLE migrations_media CHANGE status status VARCHAR(32) DEFAULT NULL;
+                        ORDER BY pictures.id;                  
+                  
+                  CREATE TABLE migrations_cards
+                      ENGINE = MYISAM
+                            SELECT
+                              cards.id AS id,
+                              'new' AS status,
+                              CONCAT('/pic/cards/',
+                                     cards.id,
+                                     '/default/',
+                                     cards.img) picture,
+                              cards.title_rus,
+                              cards.partner_url,
+                              cards.published,
+                              cards.created,
+                              cards.modified
+                        
+                            FROM cards
+                            ORDER BY cards.id ASC;
+
+                  ALTER TABLE migrations_posts_2 CHANGE status status VARCHAR(32) DEFAULT NULL;
+                  ALTER TABLE migrations_media_2 CHANGE status status VARCHAR(32) DEFAULT NULL;
+                  ALTER TABLE migrations_cards_2 CHANGE status status VARCHAR(32) DEFAULT NULL;
                         
                         "
     );

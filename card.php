@@ -11,15 +11,15 @@ try {
         $env['NM_HOST']
     );
 
-    $utils->init();
+    $utils->initAcf($env['WP_ACF_HOST']);
 
-    $stmt = $utils->getDb()->getConnection()->prepare("SELECT * FROM migrations_posts_2 WHERE status != :status order by id asc ");
+    $stmt = $utils->getDb()->getConnection()->prepare("SELECT * FROM migrations_cards_2 WHERE status != :status ORDER BY id ASC ");
     $stmt->execute(['status' => 'done']);
 
     $start = time();
 
     while ($row = $stmt->fetch(\PDO::FETCH_OBJ)){
-        $utils->addPost($row);
+        $utils->addCustomPost($row);
     }
 
     $time = time() - $start;

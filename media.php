@@ -7,10 +7,13 @@ try {
 
     $utils = new \App\Utils(
         new \App\DbConfig($env['DB_NAME'],$env['DB_HOST'], $env['DB_USER'], $env['DB_PASSWORD']),
-        new \WPAPI($env['WP_HOST'], $env['WP_USER'], $env['WP_PASSWORD'])
+        new \WPAPI($env['WP_HOST'], $env['WP_USER'], $env['WP_PASSWORD']),
+        $env['NM_HOST']
     );
 
-    $stmt = $utils->getDb()->getConnection()->prepare("SELECT * FROM migrations_media WHERE status != :status");
+    $utils->init();
+
+    $stmt = $utils->getDb()->getConnection()->prepare("SELECT * FROM migrations_media_2 WHERE status != :status");
     $stmt->execute(['status' => 'done']);
 
     $start = time();
